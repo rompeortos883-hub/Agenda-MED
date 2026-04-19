@@ -14,7 +14,7 @@
         .table-container { margin-top: 25px; border-top: 2px solid #eee; padding-top: 15px; }
         table { width: 100%; border-collapse: collapse; }
         td { padding: 10px 0; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
-        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; float: right; }
+        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; float: right; }
     </style>
 </head>
 <body>
@@ -56,27 +56,29 @@
     const form = document.getElementById('appointmentForm');
     const tableBody = document.querySelector('#appointmentTable tbody');
 
-    // GUARDAR: Sin borrado automático, solo guarda.
+    // Pedir permiso para notificaciones al cargar
+    if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+    }
+
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         const appointment = {
             patient: document.getElementById('patientName').value,
             doctor: document.getElementById('doctorSelect').value,
             date: document.getElementById('appointmentDate').value,
-            time: document.getElementById('appointmentTime').value
+            time: document.getElementById('appointmentTime').value,
+            notified: false // Para que no repita la alarma
         };
 
         push(appointmentsRef, appointment).then(() => {
             form.reset();
-            alert("Cita guardada en la base de datos");
-        }).catch(err => alert("Error: " + err.message));
+        });
     });
 
-    // MOSTRAR: Aquí ya NO hay nada que borre por fecha.
     onValue(appointmentsRef, (snapshot) => {
         const data = snapshot.val();
         tableBody.innerHTML = '';
-
         if (data) {
             Object.keys(data).forEach(key => {
                 const appData = data[key];
@@ -92,13 +94,31 @@
                     </td>
                 `;
                 tableBody.appendChild(row);
+                
+                // Activar chequeo de alarma
+                verificarAlarma(appData);
             });
         }
     });
 
-    // Función global para borrar manualmente
+    function verificarAlarma(cita) {
+        const ahora = new Date();
+        const horaCita = new Date(`${cita.date}T${cita.time}`);
+        const diferenciaMinutos = (horaCita - ahora) / 1000 / 60;
+
+        // Si faltan entre 4 y 5 minutos, tira la notificación
+        if (diferenciaMinutos > 4.8 && diferenciaMinutos <= 5) {
+            if (Notification.permission === "granted") {
+                new Notification("⚠️ Cita Próxima", {
+                    body: `En 5 min: ${cita.patient} con ${cita.doctor}`,
+                    icon: "https://cdn-icons-png.flaticon.com/512/1048/1048953.png"
+                });
+            }
+        }
+    }
+
     window.borrarCita = (key) => {
-        if(confirm("¿Eliminar esta cita definitivamente?")) {
+        if(confirm("¿Eliminar esta cita?")) {
             remove(ref(db, `citas/${key}`));
         }
     };

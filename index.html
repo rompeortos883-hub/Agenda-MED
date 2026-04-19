@@ -3,24 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agenda Guardianes</title>
+    <title>Agenda Médica - Guardianes</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #020024 0%, #00d4ff 100%); min-height: 100vh; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 450px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); height: fit-content; }
-        h2 { color: #2c3e50; text-align: center; margin-top: 0; }
+        .container { width: 100%; max-width: 450px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); height: fit-content; }
+        h2 { color: #2c3e50; text-align: center; margin-bottom: 20px; }
         form { display: flex; flex-direction: column; gap: 12px; }
         input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; }
         button { background: #4A90E2; color: white; border: none; cursor: pointer; font-weight: bold; }
-        .table-container { margin-top: 25px; }
+        .table-container { margin-top: 25px; border-top: 2px solid #eee; padding-top: 15px; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
-        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
+        td { padding: 12px 0; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
+        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; float: right; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📅 Agendar Cita</h2>
+    <h2>📅 Nueva Cita</h2>
     <form id="appointmentForm">
         <input type="text" id="patientName" placeholder="Nombre del Paciente" required>
         <select id="doctorSelect" required>
@@ -30,19 +30,12 @@
         </select>
         <input type="date" id="appointmentDate" required>
         <input type="time" id="appointmentTime" required>
-        <button type="submit">Agendar Cita</button>
+        <button type="submit">Guardar en Agenda</button>
     </form>
 
     <div class="table-container">
+        <h3 style="text-align:center; color:#7f8c8d;">Citas Registradas</h3>
         <table id="appointmentTable">
-            <thead>
-                <tr>
-                    <th>Paciente</th>
-                    <th>Doctor</th>
-                    <th>Hora</th>
-                    <th></th>
-                </tr>
-            </thead>
             <tbody></tbody>
         </table>
     </div>
@@ -50,7 +43,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, push, onValue, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
         databaseURL: "https://agenda-guardianes-default-rtdb.firebaseio.com"
@@ -63,6 +56,7 @@
     const form = document.getElementById('appointmentForm');
     const tableBody = document.querySelector('#appointmentTable tbody');
 
+    // GUARDAR
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         const appointment = {
@@ -74,43 +68,43 @@
 
         push(appointmentsRef, appointment).then(() => {
             form.reset();
+            console.log("Cita guardada");
         });
     });
 
+    // MOSTRAR (SIN BORRADO AUTOMÁTICO)
     onValue(appointmentsRef, (snapshot) => {
         const data = snapshot.val();
         tableBody.innerHTML = '';
-        
-        // Obtenemos la fecha de ayer para no borrar lo de hoy por error
-        const ayer = new Date();
-        ayer.setDate(ayer.getDate() - 1);
-        const fechaAyerStr = ayer.toISOString().split('T')[0];
 
         if (data) {
             Object.keys(data).forEach(key => {
                 const appData = data[key];
-
-                // Solo borra si la fecha es estrictamente anterior a ayer
-                if (appData.date < fechaAyerStr) {
-                    remove(ref(db, `citas/${key}`));
-                    return;
-                }
-
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${appData.patient}</td>
-                    <td>${appData.doctor.split(' ')[1]}</td>
-                    <td>${appData.time}</td>
-                    <td><button class="delete-btn" onclick="window.eliminarCita('${key}')">X</button></td>
+                    <td>
+                        <strong>${appData.patient}</strong><br>
+                        <small>🩺 ${appData.doctor}</small><br>
+                        <small>📅 ${appData.date} - ⏰ ${appData.time}</small>
+                    </td>
+                    <td style="width: 80px;">
+                        <button class="delete-btn" data-id="${key}">Borrar</button>
+                    </td>
                 `;
                 tableBody.appendChild(row);
             });
+
+            // Lógica del botón borrar
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.onclick = (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    if(confirm("¿Deseas eliminar esta cita de la lista?")) {
+                        remove(ref(db, `citas/${id}`));
+                    }
+                };
+            });
         }
     });
-
-    window.eliminarCita = (key) => {
-        remove(ref(db, `citas/${key}`));
-    };
 </script>
 </body>
 </html>

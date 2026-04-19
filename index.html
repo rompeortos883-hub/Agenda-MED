@@ -5,18 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agenda Guardianes</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #020024 0%, #00d4ff 100%); min-height: 100vh; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 500px; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); height: fit-content; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #020024 0%, #00d4ff 100%); min-height: 100vh; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 450px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); height: fit-content; }
         h2 { color: #2c3e50; text-align: center; margin-top: 0; }
-        form { display: flex; flex-direction: column; gap: 15px; }
+        form { display: flex; flex-direction: column; gap: 12px; }
         input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; }
-        button { background: #4A90E2; color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        button:hover { background: #357abd; transform: translateY(-2px); }
-        .table-container { margin-top: 30px; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
-        th { background: #f8f9fa; }
-        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+        button { background: #4A90E2; color: white; border: none; cursor: pointer; font-weight: bold; }
+        .table-container { margin-top: 25px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
+        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -32,11 +30,10 @@
         </select>
         <input type="date" id="appointmentDate" required>
         <input type="time" id="appointmentTime" required>
-        <button type="submit" id="btnAgendar">Agendar Cita</button>
+        <button type="submit">Agendar Cita</button>
     </form>
 
     <div class="table-container">
-        <h3 style="text-align:center">📋 Citas de Hoy</h3>
         <table id="appointmentTable">
             <thead>
                 <tr>
@@ -53,7 +50,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getDatabase, ref, push, onValue, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
         databaseURL: "https://agenda-guardianes-default-rtdb.firebaseio.com"
@@ -66,41 +63,35 @@
     const form = document.getElementById('appointmentForm');
     const tableBody = document.querySelector('#appointmentTable tbody');
 
-    // Pedir permiso de notificaciones
-    if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-    }
-
     form.addEventListener('submit', (e) => {
         e.preventDefault();
-        
         const appointment = {
             patient: document.getElementById('patientName').value,
             doctor: document.getElementById('doctorSelect').value,
             date: document.getElementById('appointmentDate').value,
-            time: document.getElementById('appointmentTime').value,
-            notified: false
+            time: document.getElementById('appointmentTime').value
         };
 
-        push(appointmentsRef, appointment)
-            .then(() => {
-                form.reset();
-                alert("✅ Cita agendada correctamente");
-            })
-            .catch((error) => alert("❌ Error: " + error.message));
+        push(appointmentsRef, appointment).then(() => {
+            form.reset();
+        });
     });
 
     onValue(appointmentsRef, (snapshot) => {
         const data = snapshot.val();
         tableBody.innerHTML = '';
-        const hoy = new Date().toISOString().split('T')[0];
+        
+        // Obtenemos la fecha de ayer para no borrar lo de hoy por error
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
+        const fechaAyerStr = ayer.toISOString().split('T')[0];
 
         if (data) {
             Object.keys(data).forEach(key => {
                 const appData = data[key];
 
-                // Limpieza automática de citas viejas
-                if (appData.date < hoy) {
+                // Solo borra si la fecha es estrictamente anterior a ayer
+                if (appData.date < fechaAyerStr) {
                     remove(ref(db, `citas/${key}`));
                     return;
                 }
@@ -110,30 +101,16 @@
                     <td>${appData.patient}</td>
                     <td>${appData.doctor.split(' ')[1]}</td>
                     <td>${appData.time}</td>
-                    <td><button class="delete-btn" data-id="${key}">X</button></td>
+                    <td><button class="delete-btn" onclick="window.eliminarCita('${key}')">X</button></td>
                 `;
                 tableBody.appendChild(row);
-                checkAlarm(appData);
-            });
-
-            document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.onclick = () => remove(ref(db, `citas/${btn.getAttribute('data-id')}`));
             });
         }
     });
 
-    function checkAlarm(appData) {
-        const now = new Date();
-        const appTime = new Date(`${appData.date}T${appData.time}`);
-        const diff = (appTime - now) / 1000 / 60;
-
-        if (diff > 4.8 && diff <= 5 && Notification.permission === "granted") {
-            new Notification("⚠️ Cita en 5 minutos", {
-                body: `${appData.patient} con ${appData.doctor}`,
-                icon: "https://cdn-icons-png.flaticon.com/512/1048/1048953.png"
-            });
-        }
-    }
+    window.eliminarCita = (key) => {
+        remove(ref(db, `citas/${key}`));
+    };
 </script>
 </body>
 </html>

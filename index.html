@@ -6,7 +6,7 @@
     <title>Agenda Médica - Guardianes</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #020024 0%, #00d4ff 100%); min-height: 100vh; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 450px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .container { width: 100%; max-width: 450px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); height: fit-content; }
         h2 { color: #2c3e50; text-align: center; margin-top: 0; }
         form { display: flex; flex-direction: column; gap: 12px; }
         input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; }
@@ -17,9 +17,7 @@
         .delete-btn { background: #ff4d4d; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; float: right; }
     </style>
 </head>
-<body>
-
-<div class="container">
+<body onclick="solicitarPermiso()"> <div class="container">
     <h2>📅 Nueva Cita</h2>
     <form id="appointmentForm">
         <input type="text" id="patientName" placeholder="Nombre del Paciente" required>
@@ -56,19 +54,26 @@
     const form = document.getElementById('appointmentForm');
     const tableBody = document.querySelector('#appointmentTable tbody');
 
-    // Pedir permiso para notificaciones al cargar
-    if (Notification.permission !== "granted") {
-        Notification.requestPermission();
-    }
+    // Función global para pedir permiso
+    window.solicitarPermiso = () => {
+        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    new Notification("✅ ¡Notificaciones Activas!", { body: "Te avisaremos 5 min antes de cada cita." });
+                }
+            });
+        }
+    };
 
     form.addEventListener('submit', (e) => {
         e.preventDefault();
+        solicitarPermiso(); // Pedir permiso al intentar agendar
+
         const appointment = {
             patient: document.getElementById('patientName').value,
             doctor: document.getElementById('doctorSelect').value,
             date: document.getElementById('appointmentDate').value,
-            time: document.getElementById('appointmentTime').value,
-            notified: false // Para que no repita la alarma
+            time: document.getElementById('appointmentTime').value
         };
 
         push(appointmentsRef, appointment).then(() => {
@@ -89,13 +94,11 @@
                         <small>🩺 ${appData.doctor}</small><br>
                         <small>📅 ${appData.date} - ⏰ ${appData.time}</small>
                     </td>
-                    <td style="vertical-align: middle;">
+                    <td>
                         <button class="delete-btn" onclick="window.borrarCita('${key}')">Borrar</button>
                     </td>
                 `;
                 tableBody.appendChild(row);
-                
-                // Activar chequeo de alarma
                 verificarAlarma(appData);
             });
         }
@@ -104,23 +107,18 @@
     function verificarAlarma(cita) {
         const ahora = new Date();
         const horaCita = new Date(`${cita.date}T${cita.time}`);
-        const diferenciaMinutos = (horaCita - ahora) / 1000 / 60;
+        const dif = (horaCita - ahora) / 1000 / 60;
 
-        // Si faltan entre 4 y 5 minutos, tira la notificación
-        if (diferenciaMinutos > 4.8 && diferenciaMinutos <= 5) {
-            if (Notification.permission === "granted") {
-                new Notification("⚠️ Cita Próxima", {
-                    body: `En 5 min: ${cita.patient} con ${cita.doctor}`,
-                    icon: "https://cdn-icons-png.flaticon.com/512/1048/1048953.png"
-                });
-            }
+        if (dif > 4.8 && dif <= 5 && Notification.permission === "granted") {
+            new Notification("⚠️ Cita Próxima", {
+                body: `En 5 min: ${cita.patient} con ${cita.doctor}`,
+                icon: "https://cdn-icons-png.flaticon.com/512/1048/1048953.png"
+            });
         }
     }
 
     window.borrarCita = (key) => {
-        if(confirm("¿Eliminar esta cita?")) {
-            remove(ref(db, `citas/${key}`));
-        }
+        if(confirm("¿Borrar cita?")) remove(ref(db, `citas/${key}`));
     };
 </script>
 </body>

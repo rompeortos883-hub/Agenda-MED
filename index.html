@@ -17,7 +17,9 @@
         .delete-btn { background: #ff4d4d; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; float: right; }
     </style>
 </head>
-<body onclick="solicitarPermiso()"> <div class="container">
+<body onclick="solicitarPermiso()">
+
+<div class="container">
     <h2>📅 Nueva Cita</h2>
     <form id="appointmentForm">
         <input type="text" id="patientName" placeholder="Nombre del Paciente" required>
@@ -53,22 +55,16 @@
 
     const form = document.getElementById('appointmentForm');
     const tableBody = document.querySelector('#appointmentTable tbody');
+    const yaNotificados = new Set();
 
-    // Función global para pedir permiso
     window.solicitarPermiso = () => {
-        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-            Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                    new Notification("✅ ¡Notificaciones Activas!", { body: "Te avisaremos 5 min antes de cada cita." });
-                }
-            });
+        if (Notification.permission !== "granted") {
+            Notification.requestPermission();
         }
     };
 
     form.addEventListener('submit', (e) => {
         e.preventDefault();
-        solicitarPermiso(); // Pedir permiso al intentar agendar
-
         const appointment = {
             patient: document.getElementById('patientName').value,
             doctor: document.getElementById('doctorSelect').value,
@@ -99,26 +95,43 @@
                     </td>
                 `;
                 tableBody.appendChild(row);
-                verificarAlarma(appData);
+                verificarAlarma(appData, key);
             });
         }
     });
 
-    function verificarAlarma(cita) {
+    function verificarAlarma(cita, id) {
         const ahora = new Date();
         const horaCita = new Date(`${cita.date}T${cita.time}`);
         const dif = (horaCita - ahora) / 1000 / 60;
 
-        if (dif > 4.8 && dif <= 5 && Notification.permission === "granted") {
-            new Notification("⚠️ Cita Próxima", {
-                body: `En 5 min: ${cita.patient} con ${cita.doctor}`,
-                icon: "https://cdn-icons-png.flaticon.com/512/1048/1048953.png"
-            });
+        // RANGO DE 10 MINUTOS
+        if (dif > 0 && dif <= 10 && !yaNotificados.has(id)) {
+            if (Notification.permission === "granted") {
+                new Notification("⚠️ Cita Próxima", {
+                    body: `Paciente: ${cita.patient} con ${cita.doctor} a las ${cita.time}`,
+                    icon: "https://cdn-icons-png.flaticon.com/512/1048/1048953.png"
+                });
+                yaNotificados.add(id);
+            }
         }
     }
 
+    // Revisar cada 30 segundos
+    setInterval(() => {
+        onValue(appointmentsRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                Object.keys(data).forEach(key => verificarAlarma(data[key], key));
+            }
+        }, { onlyOnce: true });
+    }, 30000);
+
     window.borrarCita = (key) => {
-        if(confirm("¿Borrar cita?")) remove(ref(db, `citas/${key}`));
+        if(confirm("¿Eliminar cita?")) {
+            yaNotificados.delete(key);
+            remove(ref(db, `citas/${key}`));
+        }
     };
 </script>
 </body>

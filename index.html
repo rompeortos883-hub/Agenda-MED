@@ -6,15 +6,15 @@
     <title>Agenda Médica - Guardianes</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #020024 0%, #00d4ff 100%); min-height: 100vh; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 450px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); height: fit-content; }
-        h2 { color: #2c3e50; text-align: center; margin-bottom: 20px; }
+        .container { width: 100%; max-width: 450px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        h2 { color: #2c3e50; text-align: center; margin-top: 0; }
         form { display: flex; flex-direction: column; gap: 12px; }
         input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; }
         button { background: #4A90E2; color: white; border: none; cursor: pointer; font-weight: bold; }
         .table-container { margin-top: 25px; border-top: 2px solid #eee; padding-top: 15px; }
         table { width: 100%; border-collapse: collapse; }
-        td { padding: 12px 0; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
-        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; float: right; }
+        td { padding: 10px 0; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
+        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 6px; cursor: pointer; float: right; }
     </style>
 </head>
 <body>
@@ -56,7 +56,7 @@
     const form = document.getElementById('appointmentForm');
     const tableBody = document.querySelector('#appointmentTable tbody');
 
-    // GUARDAR
+    // GUARDAR: Sin borrado automático, solo guarda.
     form.addEventListener('submit', (e) => {
         e.preventDefault();
         const appointment = {
@@ -68,11 +68,11 @@
 
         push(appointmentsRef, appointment).then(() => {
             form.reset();
-            console.log("Cita guardada");
-        });
+            alert("Cita guardada en la base de datos");
+        }).catch(err => alert("Error: " + err.message));
     });
 
-    // MOSTRAR (SIN BORRADO AUTOMÁTICO)
+    // MOSTRAR: Aquí ya NO hay nada que borre por fecha.
     onValue(appointmentsRef, (snapshot) => {
         const data = snapshot.val();
         tableBody.innerHTML = '';
@@ -87,24 +87,21 @@
                         <small>🩺 ${appData.doctor}</small><br>
                         <small>📅 ${appData.date} - ⏰ ${appData.time}</small>
                     </td>
-                    <td style="width: 80px;">
-                        <button class="delete-btn" data-id="${key}">Borrar</button>
+                    <td style="vertical-align: middle;">
+                        <button class="delete-btn" onclick="window.borrarCita('${key}')">Borrar</button>
                     </td>
                 `;
                 tableBody.appendChild(row);
             });
-
-            // Lógica del botón borrar
-            document.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.onclick = (e) => {
-                    const id = e.target.getAttribute('data-id');
-                    if(confirm("¿Deseas eliminar esta cita de la lista?")) {
-                        remove(ref(db, `citas/${id}`));
-                    }
-                };
-            });
         }
     });
+
+    // Función global para borrar manualmente
+    window.borrarCita = (key) => {
+        if(confirm("¿Eliminar esta cita definitivamente?")) {
+            remove(ref(db, `citas/${key}`));
+        }
+    };
 </script>
 </body>
 </html>

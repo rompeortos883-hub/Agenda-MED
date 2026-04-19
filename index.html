@@ -5,24 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agenda Guardianes</title>
     <style>
-        body { font-family: Arial, sans-serif; background-image: linear-gradient(#020024, #00d4ff); padding: 110px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h2 { color: #2c3e50; text-align: center; }
-        form { display: grid; gap: 15px; margin-bottom: 30px; }
-        input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; }
-        button { background-color: #4A90E2; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background-color: #357abd; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; border: 1px solid #eee; text-align: left; }
-        th { background-color: #f8f9fa; color: #333; }
-        .delete-btn { background-color: #ff4d4d; padding: 5px 10px; font-size: 0.8rem; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #020024 0%, #00d4ff 100%); min-height: 100vh; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 500px; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); height: fit-content; }
+        h2 { color: #2c3e50; text-align: center; margin-top: 0; }
+        form { display: flex; flex-direction: column; gap: 15px; }
+        input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; }
+        button { background: #4A90E2; color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #357abd; transform: translateY(-2px); }
+        .table-container { margin-top: 30px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+        th { background: #f8f9fa; }
+        .delete-btn { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>📅 Agendar Cita Médica</h2>
-    
+    <h2>📅 Agendar Cita</h2>
     <form id="appointmentForm">
         <input type="text" id="patientName" placeholder="Nombre del Paciente" required>
         <select id="doctorSelect" required>
@@ -32,24 +32,23 @@
         </select>
         <input type="date" id="appointmentDate" required>
         <input type="time" id="appointmentTime" required>
-        <button type="submit">Agendar Cita</button>
+        <button type="submit" id="btnAgendar">Agendar Cita</button>
     </form>
 
-    <hr>
-
-    <h2>📋 Citas Programadas</h2>
-    <table id="appointmentTable">
-        <thead>
-            <tr>
-                <th>Paciente</th>
-                <th>Doctor</th>
-                <th>Fecha</th>
-                <th>Hora</th>
-                <th>Acción</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+    <div class="table-container">
+        <h3 style="text-align:center">📋 Citas de Hoy</h3>
+        <table id="appointmentTable">
+            <thead>
+                <tr>
+                    <th>Paciente</th>
+                    <th>Doctor</th>
+                    <th>Hora</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 </div>
 
 <script type="module">
@@ -57,7 +56,7 @@
     import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
-        databaseURL: "https://agenda-guardianes-default-rtdb.firebaseio.com" 
+        databaseURL: "https://agenda-guardianes-default-rtdb.firebaseio.com"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -67,51 +66,54 @@
     const form = document.getElementById('appointmentForm');
     const tableBody = document.querySelector('#appointmentTable tbody');
 
+    // Pedir permiso de notificaciones
     if (Notification.permission !== "granted") {
         Notification.requestPermission();
     }
 
     form.addEventListener('submit', (e) => {
         e.preventDefault();
+        
         const appointment = {
             patient: document.getElementById('patientName').value,
             doctor: document.getElementById('doctorSelect').value,
             date: document.getElementById('appointmentDate').value,
             time: document.getElementById('appointmentTime').value,
-            notified: false 
+            notified: false
         };
-        push(appointmentsRef, appointment);
-        form.reset();
+
+        push(appointmentsRef, appointment)
+            .then(() => {
+                form.reset();
+                alert("✅ Cita agendada correctamente");
+            })
+            .catch((error) => alert("❌ Error: " + error.message));
     });
 
-    //  CAMBIA PARA LA LIMPIEZA
     onValue(appointmentsRef, (snapshot) => {
         const data = snapshot.val();
         tableBody.innerHTML = '';
-        
+        const hoy = new Date().toISOString().split('T')[0];
+
         if (data) {
-            const hoy = new Date().toISOString().split('T')[0]; // Fecha actual YYYY-MM-DD
-
             Object.keys(data).forEach(key => {
-                const app = data[key];
+                const appData = data[key];
 
-                // --- LÓGICA DE AUTO-LIMPIEZA ---
-                if (app.date < hoy) {
-                    remove(ref(db, `citas/${key}`)); // Borra de la nube si es de ayer o antes
-                    return; // Se salta esta cita y no la dibuja en la tabla
+                // Limpieza automática de citas viejas
+                if (appData.date < hoy) {
+                    remove(ref(db, `citas/${key}`));
+                    return;
                 }
-                // -------------------------------
 
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${app.patient}</td>
-                    <td>${app.doctor}</td>
-                    <td>${app.date}</td>
-                    <td>${app.time}</td>
-                    <td><button class="delete-btn" data-id="${key}">Eliminar</button></td>
+                    <td>${appData.patient}</td>
+                    <td>${appData.doctor.split(' ')[1]}</td>
+                    <td>${appData.time}</td>
+                    <td><button class="delete-btn" data-id="${key}">X</button></td>
                 `;
                 tableBody.appendChild(row);
-                checkAlarm(app);
+                checkAlarm(appData);
             });
 
             document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -120,14 +122,14 @@
         }
     });
 
-    function checkAlarm(app) {
+    function checkAlarm(appData) {
         const now = new Date();
-        const appTime = new Date(`${app.date}T${app.time}`);
+        const appTime = new Date(`${appData.date}T${appData.time}`);
         const diff = (appTime - now) / 1000 / 60;
 
         if (diff > 4.8 && diff <= 5 && Notification.permission === "granted") {
-            new Notification("⚠️ Próxima Cita", {
-                body: `En 5 minutos: ${app.patient} con ${app.doctor}`,
+            new Notification("⚠️ Cita en 5 minutos", {
+                body: `${appData.patient} con ${appData.doctor}`,
                 icon: "https://cdn-icons-png.flaticon.com/512/1048/1048953.png"
             });
         }

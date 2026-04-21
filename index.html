@@ -18,33 +18,15 @@
             flex-wrap: wrap;
             gap: 20px;
             justify-content: center;
-            max-width: 1200px;
+            max-width: 1300px;
             margin: auto;
         }
         .form-container { 
             flex: 1;
-            min-width: 300px;
+            min-width: 320px;
             max-width: 400px;
             background: white; padding: 25px; border-radius: 20px; 
             box-shadow: 0 10px 30px rgba(0,0,0,0.3); height: fit-content; 
-        }
-      
-        .fc-event-main {
-            white-space: normal !important;
-            word-wrap: break-word;
-        }
-
-        .fc-event {
-            height: auto !important;
-            min-height: 25px;
-            margin-bottom: 3px !important;
-            padding: 2px 5px;
-        }
-
-        .fc-event-title {
-            font-size: 0.85em;
-            font-weight: 500;
-            display: block;
         }
         .calendar-container {
             flex: 2;
@@ -57,10 +39,33 @@
         input, select, button { padding: 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; }
         button { background: #4A90E2; color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; }
         button:hover { background: #357ABD; }
-        
-        /* Ajustes de FullCalendar */
-        #calendar { max-width: 100%; height: 600px; }
-        .fc-event { cursor: pointer; padding: 2px; }
+
+        /* --- FUERZA BRUTA PARA TEXTO COMPLETO EN EVENTOS --- */
+        .fc-event {
+            white-space: normal !important;
+            height: auto !important;
+            margin-bottom: 3px !important;
+            border: none !important;
+            padding: 2px !important;
+        }
+        .fc-daygrid-event {
+            white-space: normal !important;
+            display: block !important;
+        }
+        .fc-event-main {
+            white-space: normal !important;
+            overflow: visible !important;
+            word-wrap: break-word !important;
+        }
+        .fc-event-title {
+            white-space: normal !important;
+            text-overflow: clip !important;
+            font-weight: 600 !important;
+            font-size: 0.85em !important;
+        }
+        .fc-daygrid-event-harness {
+            margin-bottom: 2px !important;
+        }
     </style>
 </head>
 <body onclick="solicitarPermiso()">
@@ -79,6 +84,9 @@
             <input type="time" id="appointmentTime" required>
             <button type="submit">Guardar en Agenda</button>
         </form>
+        <p style="font-size: 12px; color: #7f8c8d; margin-top: 20px; text-align: center;">
+            * Haz clic en una cita en el calendario para eliminarla.
+        </p>
     </div>
 
     <div class="calendar-container">
@@ -110,19 +118,19 @@
         calendar = new FullCalendar.Calendar(calendarEl, {
             initialView: 'dayGridMonth',
             locale: 'es',
+            height: 'auto',
             headerToolbar: {
                 left: 'prev,next today',
                 center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                right: 'dayGridMonth,timeGridWeek'
             },
             buttonText: {
                 today: 'Hoy',
                 month: 'Mes',
-                week: 'Semana',
-                day: 'Día'
+                week: 'Semana'
             },
             eventClick: function(info) {
-                if(confirm(`¿Deseas eliminar la cita de ${info.event.title}?`)) {
+                if(confirm(`¿Deseas eliminar la cita de: ${info.event.title}?`)) {
                     window.borrarCita(info.event.id);
                 }
             }
@@ -150,7 +158,6 @@
         });
     });
 
-    // Escuchar cambios en Firebase y actualizar calendario
     onValue(appointmentsRef, (snapshot) => {
         const data = snapshot.val();
         const events = [];
@@ -159,20 +166,19 @@
             Object.keys(data).forEach(key => {
                 const appData = data[key];
                 
-                // Formatear para FullCalendar
                 events.push({
                     id: key,
-                    title: `${appData.patient} (🩺 ${appData.doctor})`,
+                    title: `${appData.time} - ${appData.patient} (${appData.doctor})`,
                     start: `${appData.date}T${appData.time}`,
-                    backgroundColor: appData.doctor.includes('Claudia') ? '#e67e22' : '#27ae60',
-                    borderColor: 'transparent'
+                    // Naranja para Dra. Claudia, Verde para Dr. Cristian
+                    backgroundColor: appData.doctor.includes('Claudia') ? '#f39c12' : '#27ae60',
+                    textColor: '#ffffff'
                 });
 
                 verificarAlarma(appData, key);
             });
         }
         
-        // Limpiar y agregar nuevos eventos al calendario
         calendar.removeAllEvents();
         calendar.addEventSource(events);
     });
@@ -198,7 +204,6 @@
         remove(ref(db, `citas/${key}`));
     };
 
-    // Revisar alarmas cada 30 segundos
     setInterval(() => {
         onValue(appointmentsRef, (snapshot) => {
             const data = snapshot.val();
